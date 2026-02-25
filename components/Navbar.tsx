@@ -1,17 +1,18 @@
 // components/Navbar.tsx
 "use client";
 
-import { useState, useEffect } from "react"; // Tambahkan ini
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ShoppingCart, Store, Heart, Trash2, Plus, Minus, Search, Menu, User, LogOut } from "lucide-react";
+// Perhatikan: Ikon 'Package' sudah saya tambahkan di bawah ini
+import { ShoppingCart, Store, Heart, Trash2, Plus, Minus, Search, Menu, User, LogOut, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { formatPrice, products } from "@/lib/data";
-import { toast } from "sonner"; // Tambahkan ini
+import { toast } from "sonner";
 
 import {
   Sheet,
@@ -43,13 +44,13 @@ export default function Navbar() {
     if (storedUser) {
       setLoggedInUser(JSON.parse(storedUser));
     }
-  }, [pathname]); // Akan mengecek ulang setiap kali pindah halaman
+  }, [pathname]);
 
   // === 3. FUNGSI LOGOUT ===
   const handleLogout = () => {
-    localStorage.removeItem("user_wolak_walik"); // Hapus dari memori
-    setLoggedInUser(null); // Kosongkan state
-    setIsProfileOpen(false); // Tutup menu pop-up
+    localStorage.removeItem("user_wolak_walik");
+    setLoggedInUser(null);
+    setIsProfileOpen(false);
     toast.success("Anda berhasil keluar.");
     router.push("/");
   };
@@ -139,9 +140,19 @@ export default function Navbar() {
                     <p className="text-sm font-bold text-gray-900 truncate">{loggedInUser.name}</p>
                     <p className="text-xs text-gray-500 truncate mt-0.5">{loggedInUser.email}</p>
                   </div>
+                  
+                  {/* === TOMBOL PESANAN SAYA === */}
+                  <Link 
+                    href="/pesanan" 
+                    onClick={() => setIsProfileOpen(false)}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 transition-colors font-medium flex items-center gap-2 mt-1"
+                  >
+                    <Package className="w-4 h-4" /> Pesanan Saya
+                  </Link>
+
                   <button 
                     onClick={handleLogout}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium flex items-center gap-2 mt-1"
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium flex items-center gap-2"
                   >
                     <LogOut className="w-4 h-4" /> Keluar Akun
                   </button>
