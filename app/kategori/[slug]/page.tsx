@@ -1,7 +1,7 @@
 // app/kategori/[slug]/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, use } from "react"; // PERHATIKAN: Ada import 'use' di sini
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice } from "@/lib/data"; 
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { toast } from "sonner";
-import { Heart, Star, ShoppingCart, ArrowLeft } from "lucide-react";
+import { Heart, Star, ShoppingCart, ArrowLeft, Loader2 } from "lucide-react";
 import { client } from "@/sanity/lib/client"; 
 
 import {
@@ -22,10 +22,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-// 'params.slug' akan otomatis berisi nama kategori dari URL (misal: 'sneakers')
-export default function KategoriPage({ params }: { params: { slug: string } }) {
+// Menggunakan Promise untuk params (Standar Next.js 15)
+export default function KategoriPage({ params }: { params: Promise<{ slug: string }> }) {
   const router = useRouter();
-  const slug = params.slug;
+  
+  // Membuka params menggunakan fungsi use() dari React
+  const { slug } = use(params);
 
   const { addToCart } = useCart();
   const { likedItems, toggleWishlist } = useWishlist();
@@ -35,34 +37,34 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   // WADAH PENYIMPANAN DATA ASLI
-  const [categoryName, setCategoryName] = useState<string>("Kategori");
+  const [categoryName, setCategoryName] = useState<string>("");
   const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // === SIHIR PENYEDOT DATA KHUSUS KATEGORI ===
   useEffect(() => {
     async function fetchCategoryData() {
+      setIsLoading(true);
       try {
-        // 1. Ambil info Nama Kategori dari database
-        const catData = await client.fetch(`*[_type == "category" && slug.current == "${slug}"][0]{
-          name
-        }`);
+        const query = `{
+          "categoryInfo": *[_type == "category" && slug.current == $slug][0]{ name },
+          "products": *[_type == "product" && category match $slug]{
+            "id": _id, name, price, originalPrice, category, gender, sizes, colors, isNew, isBestSeller, rating, description, "image": image.asset->url
+          }
+        }`;
         
-        if (catData?.name) {
-          setCategoryName(catData.name);
+        const data = await client.fetch(query, { slug });
+
+        if (data.categoryInfo) {
+          setCategoryName(data.categoryInfo.name);
         } else {
-          // Jika nama aslinya belum ketemu, rapikan tulisan slug-nya
           setCategoryName(slug.charAt(0).toUpperCase() + slug.slice(1));
         }
-
-        // 2. Ambil SEMUA PRODUK yang 'category'-nya cocok dengan slug di URL
-        const prodData = await client.fetch(`*[_type == "product" && category match "${slug}"]{
-          "id": _id, name, price, originalPrice, category, gender, sizes, colors, isNew, isBestSeller, rating, description, "image": image.asset->url
-        }`);
-
-        setCategoryProducts(prodData);
+        
+        setCategoryProducts(data.products || []);
       } catch (error) {
         console.error("Gagal menarik data kategori:", error);
+        toast.error("Gagal memuat produk");
       } finally {
         setIsLoading(false);
       }
@@ -71,7 +73,12 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
     fetchCategoryData();
   }, [slug]);
 
+  // === 1. FUNGSI TAMBAH KERANJANG (DILINDUNGI) ===
   const handleBeli = (product: any) => {
+    if (!localStorage.getItem("user_wolak_walik")) {
+      toast.error("Akses Ditolak", { description: "Silakan masuk ke akun Anda untuk mulai belanja." });
+      router.push("/login"); return;
+    }
     if (!selectedSize || !selectedColor) {
       toast.error("Oops!", { description: "Silakan pilih ukuran dan warna terlebih dahulu." }); return;
     }
@@ -79,7 +86,12 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
     toast.success("Berhasil ditambahkan! 🎉");
   };
 
+  // === 2. FUNGSI BELI SEKARANG (DILINDUNGI) ===
   const handleBeliSekarang = (product: any) => {
+    if (!localStorage.getItem("user_wolak_walik")) {
+      toast.error("Akses Ditolak", { description: "Silakan masuk ke akun Anda untuk mulai belanja." });
+      router.push("/login"); return;
+    }
     if (!selectedSize || !selectedColor) {
       toast.error("Oops!", { description: "Silakan pilih ukuran dan warna terlebih dahulu." }); return;
     }
@@ -88,8 +100,13 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
     setTimeout(() => { router.push("/checkout"); }, 800);
   };
 
+  // === 3. FUNGSI WISHLIST (DILINDUNGI) ===
   const handleWishlistClick = (e: React.MouseEvent, productId: string) => {
     e.preventDefault(); e.stopPropagation();
+    if (!localStorage.getItem("user_wolak_walik")) {
+      toast.error("Harus Login", { description: "Silakan masuk untuk menyimpan wishlist." });
+      router.push("/login"); return;
+    }
     toggleWishlist(productId);
   };
 
@@ -102,25 +119,26 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
           <Button asChild variant="ghost" className="mb-4 pl-0 hover:bg-transparent hover:text-gray-500">
             <Link href="/"><ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Beranda</Link>
           </Button>
-          <h1 className="text-3xl md:text-5xl font-extrabold text-black mb-2">
-            Sepatu {categoryName}
+          <h1 className="text-3xl md:text-5xl font-extrabold text-black mb-2 uppercase tracking-tight">
+            Koleksi {categoryName}
           </h1>
           <p className="text-gray-500">
-            Menampilkan koleksi terbaik untuk kategori {categoryName}.
+            Menampilkan produk terbaik untuk {categoryName}.
           </p>
         </div>
 
         {/* Status Loading */}
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-pulse">
-            {[1, 2, 3, 4].map(i => <div key={i} className="h-80 bg-zinc-200 rounded-xl"></div>)}
+          <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
+            <Loader2 className="w-10 h-10 animate-spin mb-4" />
+            <p>Sedang mengambil data...</p>
           </div>
         ) : categoryProducts.length === 0 ? (
           // Status Jika Kategori Kosong
           <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Koleksi Kosong</h3>
-            <p className="text-gray-500 mb-6">Belum ada sepatu di kategori {categoryName} saat ini.</p>
-            <Button asChild className="bg-black text-white"><Link href="/">Lihat Kategori Lain</Link></Button>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Belum Ada Produk</h3>
+            <p className="text-gray-500 mb-6">Koleksi untuk kategori {categoryName} sedang disiapkan.</p>
+            <Button asChild className="bg-black text-white rounded-full px-8"><Link href="/">Cari Kategori Lain</Link></Button>
           </div>
         ) : (
           // Grid Produk
@@ -140,7 +158,7 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
                           {product.isNew && <Badge className="bg-red-500 text-[10px] px-2 py-0.5 rounded-sm">Baru</Badge>}
                           {discountPercentage > 0 && <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-sm">-{discountPercentage}%</Badge>}
                         </div>
-                        <button onClick={(e) => handleWishlistClick(e, product.id)} className="absolute top-3 right-3 p-2.5 rounded-full bg-white shadow-sm z-10">
+                        <button onClick={(e) => handleWishlistClick(e, product.id)} className="absolute top-3 right-3 p-2.5 rounded-full bg-white/80 backdrop-blur-sm shadow-sm z-10">
                           <Heart className={`h-4 w-4 ${isLiked ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
                         </button>
                       </div>
@@ -169,34 +187,34 @@ export default function KategoriPage({ params }: { params: { slug: string } }) {
                         <img src={product.image} alt={product.name} className="w-full aspect-square object-cover rounded-xl" />
                       </div>
                       <div className="p-6 md:p-8 flex flex-col h-full overflow-y-auto max-h-[60vh] md:max-h-[90vh]">
-                        <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{product.name}</h2>
-                        <span className="font-bold text-xl md:text-2xl text-gray-900 mb-6">{formatPrice(product.price)}</span>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">{product.name}</h2>
+                        <span className="font-bold text-2xl text-gray-900 mb-6">{formatPrice(product.price)}</span>
                         
-                        <p className="text-gray-500 mb-6 text-sm">{product.description}</p>
+                        <p className="text-gray-500 mb-6 text-sm leading-relaxed">{product.description}</p>
 
                         <div className="mb-4">
                           <h4 className="text-sm font-semibold mb-2">Ukuran</h4>
                           <div className="flex flex-wrap gap-2">
                             {(product.sizes || [39,40,41,42]).map((size: number) => (
-                              <button key={size} onClick={() => setSelectedSize(size)} className={`w-10 h-10 border rounded-md ${selectedSize === size ? 'bg-black text-white' : 'hover:border-black'}`}>{size}</button>
+                              <button key={size} onClick={() => setSelectedSize(size)} className={`w-10 h-10 border-2 rounded-md transition-colors ${selectedSize === size ? 'border-black bg-black text-white' : 'hover:border-black'}`}>{size}</button>
                             ))}
                           </div>
                         </div>
 
-                        <div className="mb-6">
+                        <div className="mb-8">
                           <h4 className="text-sm font-semibold mb-2">Warna</h4>
                           <div className="flex gap-2">
                             {(product.colors || ['Hitam', 'Putih']).map((color: string) => (
-                              <button key={color} onClick={() => setSelectedColor(color)} className={`px-3 py-1.5 border rounded-md ${selectedColor === color ? 'bg-black text-white' : 'hover:border-black'}`}>{color}</button>
+                              <button key={color} onClick={() => setSelectedColor(color)} className={`px-4 py-2 border-2 rounded-md transition-colors ${selectedColor === color ? 'border-black bg-black text-white' : 'hover:border-black'}`}>{color}</button>
                             ))}
                           </div>
                         </div>
 
                         <div className="flex gap-3 mt-auto pt-6 border-t border-gray-100">
-                          <Button variant="outline" className="flex-1 gap-2 h-12 border-gray-300 hover:bg-gray-50" onClick={() => handleBeli(product)}>
-                            <ShoppingCart className="w-4 h-4" />
+                          <Button variant="outline" className="flex-1 h-12 border-zinc-200" onClick={() => handleBeli(product)}>
+                            <ShoppingCart className="w-5 h-5" />
                           </Button>
-                          <Button className="flex-[3] gap-2 h-12 bg-black hover:bg-gray-800 text-white shadow-md" onClick={() => handleBeliSekarang(product)}>
+                          <Button className="flex-[3] h-12 bg-black hover:bg-zinc-800 text-white font-bold" onClick={() => handleBeliSekarang(product)}>
                             Beli Sekarang
                           </Button>
                         </div>

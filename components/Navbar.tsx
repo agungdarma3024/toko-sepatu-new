@@ -1,15 +1,17 @@
 // components/Navbar.tsx
 "use client";
 
+import { useState, useEffect } from "react"; // Tambahkan ini
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ShoppingCart, Store, Heart, Trash2, Plus, Minus, Search, Menu, User } from "lucide-react";
+import { ShoppingCart, Store, Heart, Trash2, Plus, Minus, Search, Menu, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { formatPrice, products } from "@/lib/data";
+import { toast } from "sonner"; // Tambahkan ini
 
 import {
   Sheet,
@@ -30,6 +32,27 @@ export default function Navbar() {
   
   const { likedItems } = useWishlist();
   const wishlistProducts = products.filter((product) => likedItems.includes(product.id));
+
+  // === 1. STATE UNTUK USER LOGIN ===
+  const [loggedInUser, setLoggedInUser] = useState<{name: string, email: string} | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // === 2. BACA MEMORI BROWSER SAAT NAVBAR MUNCUL ===
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user_wolak_walik");
+    if (storedUser) {
+      setLoggedInUser(JSON.parse(storedUser));
+    }
+  }, [pathname]); // Akan mengecek ulang setiap kali pindah halaman
+
+  // === 3. FUNGSI LOGOUT ===
+  const handleLogout = () => {
+    localStorage.removeItem("user_wolak_walik"); // Hapus dari memori
+    setLoggedInUser(null); // Kosongkan state
+    setIsProfileOpen(false); // Tutup menu pop-up
+    toast.success("Anda berhasil keluar.");
+    router.push("/");
+  };
 
   if (pathname.startsWith("/admin")) return null;
 
@@ -82,10 +105,9 @@ export default function Navbar() {
           </nav>
         </div>
 
-        {/* KANAN: Pencarian, Wishlist, Keranjang */}
+        {/* KANAN: Pencarian, User, Wishlist, Keranjang */}
         <div className="flex items-center gap-2 md:gap-4">
           
-          {/* Pencarian (Sembunyikan input di HP, hanya tampilkan di Desktop) */}
           <div className="hidden lg:flex relative w-64 group">
             <Input type="text" placeholder="Cari sepatu..." className="pl-9 pr-4 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 focus-visible:ring-zinc-700 rounded-full transition-all group-hover:bg-zinc-800"/>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
@@ -93,12 +115,46 @@ export default function Navbar() {
 
           <div className="w-px h-6 bg-zinc-800 hidden md:block mx-1"></div>
 
-          {/* LOGIN USER */}
+          {/* === LOGIN USER ATAU PROFIL === */}
+          {loggedInUser ? (
+            <div className="relative">
+              {/* Tombol Profil (Inisial Nama) */}
+              <Button 
+                variant="ghost" 
+                className="relative rounded-full hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center gap-2 px-2"
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+              >
+                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-black font-extrabold text-sm">
+                  {loggedInUser.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden md:block max-w-[80px] truncate text-sm font-medium">
+                  {loggedInUser.name.split(" ")[0]}
+                </span>
+              </Button>
+
+              {/* Pop-up Menu Profil */}
+              {isProfileOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl py-2 border border-gray-100 z-50 flex flex-col">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                    <p className="text-sm font-bold text-gray-900 truncate">{loggedInUser.name}</p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{loggedInUser.email}</p>
+                  </div>
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium flex items-center gap-2 mt-1"
+                  >
+                    <LogOut className="w-4 h-4" /> Keluar Akun
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
             <Link href="/login">
               <Button variant="ghost" size="icon" className="relative rounded-full hover:bg-zinc-800 text-zinc-300 hover:text-white">
-              <User className="h-5 w-5" />
+                <User className="h-5 w-5" />
               </Button>
             </Link>
+          )}
 
           {/* WISHLIST */}
           <Sheet>
@@ -119,7 +175,7 @@ export default function Navbar() {
                       <img src={item.image} alt={item.name} className="h-16 w-16 object-cover rounded-md bg-gray-100" />
                       <div className="flex-1">
                         <h4 className="font-semibold text-sm line-clamp-1">{item.name}</h4>
-                        <p className="text-sm font-bold text-primary mt-1">{formatPrice(item.price)}</p>
+                        <p className="text-sm font-bold text-black mt-1">{formatPrice(item.price)}</p>
                       </div>
                     </div>
                   ))
@@ -128,7 +184,7 @@ export default function Navbar() {
             </SheetContent>
           </Sheet>
 
-          {/* KERANJANG DENGAN CEKLIS */}
+          {/* KERANJANG */}
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" className="relative rounded-full px-3 md:px-4 border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800 hover:text-white">
@@ -140,7 +196,7 @@ export default function Navbar() {
             <SheetContent className="w-full sm:max-w-md flex flex-col bg-white text-black px-4 sm:px-6">
               <SheetHeader><SheetTitle>Keranjang Belanja ({cartCount})</SheetTitle></SheetHeader>
               
-              <div className="mt-6 flex-1 overflow-y-auto pr-1 flex flex-col gap-4">
+              <div className="mt-6 flex-1 overflow-y-auto pr-1 flex flex-col gap-4 custom-scrollbar">
                 {cartItems.length === 0 ? (
                   <p className="text-gray-500 text-center py-8 text-sm">Keranjang Anda masih kosong.</p>
                 ) : (
@@ -177,7 +233,7 @@ export default function Navbar() {
                 <div className="border-t pt-4 mt-auto">
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-sm text-gray-600">Total ({selectedCount})</span>
-                    <span className="font-bold text-lg sm:text-xl text-primary">{formatPrice(selectedTotal)}</span>
+                    <span className="font-bold text-lg sm:text-xl text-black">{formatPrice(selectedTotal)}</span>
                   </div>
                   <Button onClick={() => router.push("/checkout")} className="w-full h-12 bg-black hover:bg-gray-800 text-white font-medium text-base rounded-full disabled:bg-gray-300 disabled:cursor-not-allowed" disabled={selectedCount === 0}>
                     Bayar

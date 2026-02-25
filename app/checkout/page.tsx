@@ -1,7 +1,7 @@
 // app/checkout/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Tambahkan useEffect
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
@@ -9,9 +9,9 @@ import { formatPrice } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { MapPin, Truck, CreditCard, ShieldCheck, ChevronLeft, ShoppingCart, KeyRound } from "lucide-react";
+import { MapPin, Truck, ShieldCheck, ChevronLeft, ShoppingCart, KeyRound } from "lucide-react";
+import { client } from "@/sanity/lib/client"
 
-// Import Dialog untuk Modal OTP
 import {
   Dialog,
   DialogContent,
@@ -28,9 +28,28 @@ export default function CheckoutPage() {
   const [shippingCost, setShippingCost] = useState(15000);
   const [formData, setFormData] = useState({ name: "", phone: "", email: "", address: "" });
 
-  // === STATE BARU UNTUK FITUR OTP ===
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+
+  // === SISTEM KEAMANAN & AUTO-FILL ===
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user_wolak_walik");
+    
+    // 1. Jika tidak ada data login, tendang ke halaman login
+    if (!storedUser) {
+      toast.error("Akses Ditolak", { description: "Anda harus login untuk melakukan pembayaran." });
+      router.push("/login");
+    } else {
+      // 2. Jika ada, ambil data namanya dan isikan otomatis ke dalam form
+      const userData = JSON.parse(storedUser);
+      setFormData(prev => ({ 
+        ...prev, 
+        name: userData.name || "", 
+        email: userData.email || "" 
+      }));
+    }
+  }, [router]);
+  // ====================================
 
   if (selectedItems.length === 0) {
     return (
@@ -49,7 +68,6 @@ export default function CheckoutPage() {
 
   const grandTotal = selectedTotal + shippingCost;
 
-  // 1. TAHAP PERTAMA: KLIK BAYAR -> VALIDASI -> MUNCULKAN OTP
   const handleRequestOTP = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -72,27 +90,63 @@ export default function CheckoutPage() {
       }
     }
 
-    // Jika validasi format lolos, Pura-puranya kita kirim WA, lalu buka Modal OTP
     toast.success("Kode OTP dikirim!", { description: `Cek WhatsApp di nomor ${formData.phone}` });
     setIsOtpModalOpen(true);
   };
 
-  // 2. TAHAP KEDUA: CEK KODE OTP YANG DIMASUKKAN USER
-  const handleVerifyOTP = () => {
-    // Di dunia nyata, ini akan dicek ke database. Di sini kita buat simulasi kode benarnya "1234"
+  // ... kode di atasnya tetap sama ...
+
+  // === FUNGSI MENGIRIM PESANAN KE SANITY ===
+  const handleVerifyOTP = async () => {
     if (otpCode === "1234") {
       setIsOtpModalOpen(false);
-      toast.loading("Kode benar! Menghubungkan ke Midtrans...");
+      toast.loading("Memproses pesanan Anda...");
       
-      setTimeout(() => {
+      try {
+        // 1. Siapkan daftar keranjang untuk dikirim ke Sanity
+        // (Sanity butuh '_key' unik untuk setiap barang di dalam keranjang)
+        const orderItems = selectedItems.map(item => ({
+          _key: Math.random().toString(36).substring(7), 
+          productName: item.name,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          price: item.price
+        }));
+
+        // 2. Tembakkan datanya ke Sanity Studio!
+        await client.create({
+          _type: 'order',
+          customerName: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          items: orderItems,
+          totalPrice: grandTotal,
+          status: 'pending', // Otomatis statusnya "Menunggu Konfirmasi"
+          orderDate: new Date().toISOString(),
+        });
+
         toast.dismiss();
-        toast.success("Pesanan Berhasil Dibuat! 🎉", { description: "Simulasi pembayaran sukses." });
-        router.push("/"); 
-      }, 2000);
+        toast.success("Pesanan Berhasil Dibuat! 🎉", { description: "Terima kasih! Kami akan memproses pesanan Anda." });
+        
+        // Arahkan kembali ke Beranda setelah 2 detik
+        setTimeout(() => {
+          router.push("/"); 
+        }, 2000);
+
+      } catch (error) {
+        console.error("Gagal menyimpan pesanan:", error);
+        toast.dismiss();
+        toast.error("Terjadi Kesalahan", { description: "Gagal membuat pesanan, silakan coba lagi." });
+      }
+
     } else {
       toast.error("Kode OTP Salah!", { description: "Silakan masukkan kode 1234 untuk percobaan ini." });
     }
   };
+
+  // ... sisa kode di bawahnya (return JSX) tetap sama ...
 
   return (
     <main className="min-h-screen bg-zinc-50 pt-8 pb-24">
@@ -112,12 +166,13 @@ export default function CheckoutPage() {
               
               <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                 <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                  <MapPin className="w-5 h-5 text-primary" /> Alamat Pengiriman
+                  <MapPin className="w-5 h-5 text-black" /> Alamat Pengiriman
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Nama Lengkap *</label>
-                    <Input required placeholder="Cth: Budi Santoso" className="bg-gray-50" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                    {/* Nilai formData.name otomatis terisi dari akun user */}
+                    <Input required placeholder="Cth: Budi Santoso" className="bg-gray-50 border-gray-200 focus-visible:ring-black" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Nomor WhatsApp Aktif *</label>
@@ -126,7 +181,8 @@ export default function CheckoutPage() {
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium text-gray-700">Email (Opsional)</label>
-                    <Input type="email" placeholder="budi@email.com" className="bg-gray-50" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                    {/* Nilai formData.email otomatis terisi dari akun user */}
+                    <Input type="email" placeholder="budi@email.com" className="bg-gray-50 border-gray-200 focus-visible:ring-black" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-medium text-gray-700">Alamat Lengkap *</label>
@@ -137,7 +193,7 @@ export default function CheckoutPage() {
 
               <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                 <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-                  <Truck className="w-5 h-5 text-primary" /> Metode Pengiriman
+                  <Truck className="w-5 h-5 text-black" /> Metode Pengiriman
                 </h2>
                 <div className="flex flex-col gap-3">
                   <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingCost === 15000 ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-300'}`}>
@@ -162,10 +218,10 @@ export default function CheckoutPage() {
           <div className="flex-1">
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm sticky top-24">
               <h2 className="text-lg font-bold mb-6 border-b pb-4">Ringkasan Pesanan</h2>
-              <div className="flex flex-col gap-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
+              <div className="flex flex-col gap-4 mb-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {selectedItems.map((item) => (
                   <div key={item.cartItemId} className="flex gap-4 items-start">
-                    <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100 border border-gray-200" />
+                    <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover bg-gray-100 border border-gray-200 shrink-0" />
                     <div className="flex-1">
                       <h4 className="text-sm font-semibold line-clamp-1">{item.name}</h4>
                       <p className="text-xs text-gray-500 mt-0.5">Ukuran: {item.size} | Warna: {item.color}</p>
@@ -184,7 +240,7 @@ export default function CheckoutPage() {
               </div>
 
               <div className="border-t border-gray-200 pt-4 mb-6">
-                <div className="flex justify-between items-center"><span className="font-bold text-gray-900">Total Pembayaran</span><span className="font-extrabold text-2xl text-primary">{formatPrice(grandTotal)}</span></div>
+                <div className="flex justify-between items-center"><span className="font-bold text-gray-900">Total Pembayaran</span><span className="font-extrabold text-2xl text-black">{formatPrice(grandTotal)}</span></div>
               </div>
 
               <Button type="submit" form="checkout-form" className="w-full h-14 bg-black hover:bg-gray-800 text-white text-base font-bold rounded-xl shadow-md flex items-center justify-center gap-2">
@@ -200,7 +256,7 @@ export default function CheckoutPage() {
       <Dialog open={isOtpModalOpen} onOpenChange={setIsOtpModalOpen}>
         <DialogContent className="sm:max-w-md bg-white text-center p-8">
           <DialogHeader>
-            <div className="mx-auto w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
+            <div className="mx-auto w-12 h-12 bg-zinc-100 text-black rounded-full flex items-center justify-center mb-4">
               <KeyRound className="w-6 h-6" />
             </div>
             <DialogTitle className="text-2xl font-bold mb-2">Verifikasi Nomor WA</DialogTitle>
@@ -215,7 +271,7 @@ export default function CheckoutPage() {
               type="text" 
               maxLength={4}
               placeholder="Masukkan 4 digit (Ketik: 1234)" 
-              className="text-center text-2xl tracking-[0.5em] h-14 font-bold bg-gray-50 border-gray-300 focus:border-black focus:ring-black"
+              className="text-center text-2xl tracking-[0.5em] h-14 font-bold bg-gray-50 border-gray-300 focus:border-black focus-visible:ring-black"
               value={otpCode}
               onChange={(e) => setOtpCode(e.target.value)}
             />
