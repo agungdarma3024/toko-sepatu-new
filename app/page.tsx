@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatPrice, heroBanners, categories } from "@/lib/data"; // "products" dihapus karena pakai data asli
+import { formatPrice } from "@/lib/data"; // Kita HANYA mengimpor formatPrice sekarang
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,41 +40,45 @@ export default function Home() {
   const [selectedSize, setSelectedSize] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
-  // === WADAH UNTUK MENYIMPAN DATA DARI DATABASE ===
+  // === WADAH UNTUK MENYIMPAN 3 JENIS DATA DARI DATABASE ===
   const [realProducts, setRealProducts] = useState<any[]>([]);
+  const [realBanners, setRealBanners] = useState<any[]>([]);
+  const [realCategories, setRealCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const autoplayPlugin = React.useRef(
     Autoplay({ delay: 5000, stopOnInteraction: true })
   );
 
-  // === PENYEDOT DATA DARI SANITY (FULL DATA) ===
+  // === PENYEDOT DATA DARI SANITY (PRODUK, BANNER, KATEGORI) ===
   useEffect(() => {
-    async function getRealProducts() {
+    async function fetchAllData() {
       try {
-        const dataAsli = await client.fetch(`*[_type == "product"]{
-          "id": _id,
-          name,
-          price,
-          originalPrice,
-          category,
-          gender,
-          sizes,
-          colors,
-          isNew,
-          isBestSeller,
-          rating,
-          description,
-          "image": image.asset->url
+        // 1. Sedot Data Produk
+        const dataProduk = await client.fetch(`*[_type == "product"]{
+          "id": _id, name, price, originalPrice, category, gender, sizes, colors, isNew, isBestSeller, rating, description, "image": image.asset->url
         }`);
-        setRealProducts(dataAsli);
+        
+        // 2. Sedot Data Banner
+        const dataBanner = await client.fetch(`*[_type == "banner"]{
+          "id": _id, title, subtitle, buttonText, link, "image": image.asset->url
+        }`);
+
+        // 3. Sedot Data Kategori
+        const dataKategori = await client.fetch(`*[_type == "category"]{
+          "id": _id, name, "slug": slug.current, "image": image.asset->url
+        }`);
+
+        setRealProducts(dataProduk);
+        setRealBanners(dataBanner);
+        setRealCategories(dataKategori);
       } catch (error) {
         console.error("Gagal menarik data:", error);
       } finally {
         setIsLoading(false);
       }
     }
-    getRealProducts();
+    fetchAllData();
   }, []);
 
   const handleBeli = (product: any) => {
@@ -102,55 +106,74 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white">
       
-      {/* === 1. HERO CAROUSEL === */}
+      {/* === 1. HERO CAROUSEL (DATA ASLI) === */}
       <section className="relative">
-        <Carousel plugins={[autoplayPlugin.current]} className="w-full" opts={{ loop: true }}>
-          <CarouselContent>
-            {heroBanners.map((banner) => (
-              <CarouselItem key={banner.id} className="relative h-[50vh] md:h-[70vh] w-full bg-zinc-900">
-                <img src={banner.image} alt={banner.title} className="w-full h-full object-cover opacity-60" />
-                <div className="absolute inset-0 flex flex-col justify-center items-center text-center text-white p-4">
-                  <h2 className="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight drop-shadow-lg">{banner.title}</h2>
-                  <p className="text-lg md:text-xl mb-8 max-w-2xl drop-shadow-md font-light">{banner.subtitle}</p>
-                  <Button asChild size="lg" className="rounded-full text-base font-semibold px-8 bg-white text-black hover:bg-zinc-200 border-0">
-                    <Link href={banner.link}>{banner.buttonText}</Link>
-                  </Button>
-                </div>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious className="left-4 bg-white/20 hover:bg-white/40 border-0 text-white hidden md:flex" />
-          <CarouselNext className="right-4 bg-white/20 hover:bg-white/40 border-0 text-white hidden md:flex" />
-        </Carousel>
+        {isLoading ? (
+          <div className="h-[50vh] md:h-[70vh] w-full bg-zinc-100 animate-pulse flex items-center justify-center">
+            <span className="text-gray-400">Memuat Banner...</span>
+          </div>
+        ) : (
+          <Carousel plugins={[autoplayPlugin.current]} className="w-full" opts={{ loop: true }}>
+            <CarouselContent>
+              {realBanners.map((banner) => (
+                <CarouselItem key={banner.id} className="relative h-[50vh] md:h-[70vh] w-full bg-zinc-900">
+                  <img src={banner.image} alt={banner.title} className="w-full h-full object-cover opacity-60" />
+                  <div className="absolute inset-0 flex flex-col justify-center items-center text-center text-white p-4">
+                    <h2 className="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight drop-shadow-lg">{banner.title}</h2>
+                    <p className="text-lg md:text-xl mb-8 max-w-2xl drop-shadow-md font-light">{banner.subtitle}</p>
+                    {/* Default link jika kosong adalah /produk */}
+                    <Button asChild size="lg" className="rounded-full text-base font-semibold px-8 bg-white text-black hover:bg-zinc-200 border-0">
+                      <Link href={banner.link || "/produk"}>{banner.buttonText || "Belanja Sekarang"}</Link>
+                    </Button>
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="left-4 bg-white/20 hover:bg-white/40 border-0 text-white hidden md:flex" />
+            <CarouselNext className="right-4 bg-white/20 hover:bg-white/40 border-0 text-white hidden md:flex" />
+          </Carousel>
+        )}
       </section>
 
-      {/* === 2. KATEGORI POPULER === */}
+      {/* === 2. KATEGORI POPULER (DATA ASLI) === */}
       <section className="py-10 md:py-16 container mx-auto px-4">
         <h3 className="text-xl md:text-2xl font-bold mb-6 text-left">Kategori Populer</h3>
-        <div className="hidden md:grid md:grid-cols-3 gap-6">
-          {categories.map((cat, index) => (
-            <Link href={cat.link} key={`desktop-${index}`} className="group relative h-64 rounded-2xl overflow-hidden cursor-pointer shadow-sm">
-              <img src={cat.image} alt={cat.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-              <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/40" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <h4 className="text-white text-3xl font-bold tracking-wider drop-shadow-md">{cat.name}</h4>
-              </div>
-            </Link>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:hidden">
-          {categories.map((cat, index) => (
-            <Link href={cat.link} key={`mobile-${index}`} className="relative h-28 rounded-xl overflow-hidden shadow-sm active:scale-95 transition-transform">
-              <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <h4 className="text-white text-lg font-bold drop-shadow-md tracking-wide">{cat.name}</h4>
-              </div>
-            </Link>
-          ))}
-        </div>
+        
+        {isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 animate-pulse">
+            {[1, 2, 3].map(i => <div key={i} className="h-64 bg-zinc-100 rounded-2xl"></div>)}
+          </div>
+        ) : (
+          <>
+            {/* TAMPILAN DESKTOP */}
+            <div className="hidden md:grid md:grid-cols-3 gap-6">
+              {realCategories.map((cat) => (
+                <Link href={`/kategori/${cat.slug}`} key={`desktop-${cat.id}`} className="group relative h-64 rounded-2xl overflow-hidden cursor-pointer shadow-sm">
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/40" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <h4 className="text-white text-3xl font-bold tracking-wider drop-shadow-md">{cat.name}</h4>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* TAMPILAN MOBILE */}
+            <div className="grid grid-cols-2 gap-3 md:hidden">
+              {realCategories.map((cat) => (
+                <Link href={`/kategori/${cat.slug}`} key={`mobile-${cat.id}`} className="relative h-28 rounded-xl overflow-hidden shadow-sm active:scale-95 transition-transform">
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <h4 className="text-white text-lg font-bold drop-shadow-md tracking-wide">{cat.name}</h4>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
-      {/* === 3. PRODUK UNGGULAN (DATA ASLI SANITY) === */}
+      {/* === 3. PRODUK UNGGULAN === */}
       <section className="py-16 bg-zinc-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
@@ -159,7 +182,9 @@ export default function Home() {
           </div>
 
           {isLoading ? (
-            <div className="text-center py-10 text-gray-500 animate-pulse">Menarik data dari database...</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 animate-pulse">
+              {[1, 2, 3, 4].map(i => <div key={i} className="h-80 bg-zinc-200 rounded-xl"></div>)}
+            </div>
           ) : realProducts.length === 0 ? (
             <div className="text-center py-10 text-gray-500">Belum ada produk di database.</div>
           ) : (
@@ -200,8 +225,6 @@ export default function Home() {
 
                     <DialogContent className="sm:max-w-[850px] p-0 overflow-hidden rounded-2xl bg-white text-black w-[95vw] sm:w-full">
                       <DialogTitle className="sr-only">{product.name}</DialogTitle>
-                      <DialogDescription className="sr-only">Detail dari {product.name}</DialogDescription>
-
                       <div className="grid grid-cols-1 md:grid-cols-2">
                         <div className="bg-gray-50 p-6 flex items-center justify-center">
                           <img src={product.image} alt={product.name} className="w-full aspect-square object-cover rounded-xl" />
@@ -231,10 +254,10 @@ export default function Home() {
                           </div>
 
                           <div className="flex gap-3 mt-auto pt-6 border-t border-gray-100">
-                            <Button variant="outline" className="flex-1 gap-2 h-12 border-gray-300 hover:bg-gray-50" onClick={() => handleBeli(product)}>
+                            <Button variant="outline" className="flex-1 gap-2 h-12" onClick={() => handleBeli(product)}>
                               <ShoppingCart className="w-4 h-4" />
                             </Button>
-                            <Button className="flex-[3] gap-2 h-12 bg-black hover:bg-gray-800 text-white shadow-md" onClick={() => handleBeliSekarang(product)}>
+                            <Button className="flex-[3] gap-2 h-12 bg-black text-white" onClick={() => handleBeliSekarang(product)}>
                               Beli Sekarang
                             </Button>
                           </div>
@@ -249,7 +272,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* === 4. RILIS TERBARU (DATA ASLI SANITY) === */}
+      {/* === 4. RILIS TERBARU === */}
       <section className="py-16 bg-zinc-950 text-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
@@ -285,7 +308,6 @@ export default function Home() {
                       </Card>
                     </DialogTrigger>
 
-                    {/* Modal Detail Rilis Terbaru (Sama seperti di atas) */}
                     <DialogContent className="sm:max-w-[850px] p-0 overflow-hidden rounded-2xl bg-white text-black w-[95vw] sm:w-full">
                       <DialogTitle className="sr-only">{product.name}</DialogTitle>
                       <div className="grid grid-cols-1 md:grid-cols-2">
