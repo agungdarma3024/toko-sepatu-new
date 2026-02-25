@@ -1,7 +1,10 @@
-// sanity/schema.ts
+// sanity/schemaTypes/index.ts
 import { type SchemaTypeDefinition } from 'sanity'
-import { product } from '../product' // Memanggil cetakan produk kita
+import { product } from '../product'
+import { category } from '../category'
+import { banner } from '../banner'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [product], // Mendaftarkan cetakan ke database
+  // Tambahkan category dan banner di dalam kotak kurung siku ini
+  types: [product, category, banner], 
 }

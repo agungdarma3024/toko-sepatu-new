@@ -8,6 +8,9 @@ import { Store, Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { useEffect } from "react";
+import { client } from "@/sanity/lib/client"; 
+// (Catatan: Jika error merah, coba ubah path-nya jadi "@/src/sanity/lib/client")
 
 export default function RegisterPage() {
   const router = useRouter();
