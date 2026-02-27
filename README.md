@@ -8,7 +8,7 @@
 
 Wolak-Walik is a fully custom, high-performance e-commerce platform built from scratch. Designed to provide a seamless shopping experience with lightning-fast load times and a powerful headless CMS backend for easy store management.
 
-🌐 **Live Demo:** [Masukkan Link Vercel Anda Di Sini]
+🌐 **Live Demo:** https://toko-sepatu-wolak-walik.vercel.app/
 
 ---
 
